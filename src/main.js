@@ -2,42 +2,59 @@ import './style.css';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-const canvas = document.getElementById('aion-canvas');
-const statusEl = document.getElementById('status');
-const logEl = document.getElementById('log');
-const inputEl = document.getElementById('message');
-const sendBtn = document.getElementById('send');
-const voiceBtn = document.getElementById('voice');
-
 const CHAT_URL = 'https://aion-matrix-core.onrender.com/api/chat';
 const MODEL_URL = '/models/AION_TEST.glb';
 
 /*
-  Если модель снова стоит спиной:
-  1) попробуй Math.PI
-  2) если не поможет — поставь 0
-  3) если боком — попробуй Math.PI / 2 или -Math.PI / 2
+  Если после запуска модель окажется спиной,
+  поменяй 0 на Math.PI
 */
-const MODEL_FRONT_ROTATION = Math.PI;
+const MODEL_FRONT_ROTATION = 0;
+
+const canvas = document.getElementById('aion-canvas');
+const inputEl = document.getElementById('message');
+const sendBtn = document.getElementById('send');
+const voiceBtn = document.getElementById('voice');
 
 let model = null;
 let mixer = null;
-let mode = 'idle';
-let morphMeshes = [];
-let speechUnlocked = false;
+let modelRoot = null;
 
-function log(message) {
-  const text = String(message);
-  statusEl.textContent = text;
-  logEl.textContent = text + '\n' + logEl.textContent;
-  console.log('[AION]', text);
+let speechUnlocked = false;
+let currentMood = 'idle';
+let isSpeaking = false;
+let isListening = false;
+
+const morphTargets = {
+  mouth: [],
+  smile: [],
+  blink: []
+};
+
+const rigBones = {
+  hips: null,
+  spine: null,
+  chest: null,
+  neck: null,
+  head: null,
+  leftShoulder: null,
+  rightShoulder: null,
+  leftUpperArm: null,
+  rightUpperArm: null,
+  leftLowerArm: null,
+  rightLowerArm: null,
+  leftHand: null,
+  rightHand: null
+};
+
+const baseRotations = new Map();
+
+function log(...args) {
+  console.log('[AION]', ...args);
 }
 
-function fail(message) {
-  const text = 'ERROR: ' + String(message);
-  statusEl.textContent = text;
-  logEl.textContent = text + '\n' + logEl.textContent;
-  console.error('[AION]', text);
+function fail(...args) {
+  console.error('[AION]', ...args);
 }
 
 function unlockSpeech() {
@@ -45,14 +62,14 @@ function unlockSpeech() {
   if (!('speechSynthesis' in window)) return;
 
   try {
-    const utterance = new SpeechSynthesisUtterance('');
-    utterance.lang = 'ru-RU';
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    const utter = new SpeechSynthesisUtterance('');
+    utter.volume = 0;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utter);
     speechUnlocked = true;
-    log('TTS unlocked by user action');
-  } catch (error) {
-    log('TTS unlock failed: ' + (error?.message || String(error)));
+    log('Speech unlocked');
+  } catch (e) {
+    fail('Speech unlock error:', e);
   }
 }
 
@@ -67,7 +84,7 @@ document.addEventListener(
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
-  alpha: false
+  alpha: true
 });
 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -78,262 +95,333 @@ if ('outputColorSpace' in renderer) {
 }
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x020712);
 
 const camera = new THREE.PerspectiveCamera(
-  35,
+  34,
   window.innerWidth / window.innerHeight,
   0.1,
   100
 );
 
-camera.position.set(0, 1.3, 3.4);
-camera.lookAt(0, 0.55, 0);
+camera.position.set(0, 1.35, 4.1);
+camera.lookAt(0, 1.0, 0);
 
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x203040, 1.25);
-scene.add(hemiLight);
+const ambient = new THREE.HemisphereLight(0xffffff, 0x102034, 1.25);
+scene.add(ambient);
 
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.45);
-keyLight.position.set(3, 6, 4);
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
+keyLight.position.set(3, 7, 4);
 scene.add(keyLight);
 
-const rimLight = new THREE.DirectionalLight(0x6fd7ff, 0.85);
+const rimLight = new THREE.DirectionalLight(0x67d9ff, 1.0);
 rimLight.position.set(-4, 3, -2);
 scene.add(rimLight);
 
-const grid = new THREE.GridHelper(5, 12, 0x2b9fff, 0x12324a);
-grid.position.y = 0;
-scene.add(grid);
+const fillLight = new THREE.PointLight(0x4eb8ff, 0.6, 20);
+fillLight.position.set(0, 2.4, 2.2);
+scene.add(fillLight);
 
-const testCube = new THREE.Mesh(
-  new THREE.BoxGeometry(0.45, 0.45, 0.45),
-  new THREE.MeshStandardMaterial({
-    color: 0x35d9ff,
-    emissive: 0x062033,
-    roughness: 0.45,
-    metalness: 0.15
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(4.4, 64),
+  new THREE.MeshBasicMaterial({
+    color: 0x0a2442,
+    transparent: true,
+    opacity: 0.55
   })
 );
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = 0;
+scene.add(floor);
 
-testCube.position.set(0, 1, 0);
-scene.add(testCube);
+const ring = new THREE.Mesh(
+  new THREE.RingGeometry(0.8, 1.25, 64),
+  new THREE.MeshBasicMaterial({
+    color: 0x48c7ff,
+    transparent: true,
+    opacity: 0.28,
+    side: THREE.DoubleSide
+  })
+);
+ring.rotation.x = -Math.PI / 2;
+ring.position.y = 0.01;
+scene.add(ring);
 
-function collectMorphs(root) {
-  morphMeshes = [];
+const grid = new THREE.GridHelper(6, 18, 0x2f96ff, 0x14304c);
+grid.position.y = 0.001;
+scene.add(grid);
 
-  root.traverse((node) => {
-    if (node.isMesh) {
-      node.frustumCulled = false;
+const testOrb = new THREE.Mesh(
+  new THREE.SphereGeometry(0.22, 24, 24),
+  new THREE.MeshStandardMaterial({
+    color: 0x4edaff,
+    emissive: 0x0a1f3f,
+    roughness: 0.35,
+    metalness: 0.1
+  })
+);
+testOrb.position.set(0, 1.15, 0);
+scene.add(testOrb);
+
+function findFirstBoneByPatterns(patterns) {
+  const bones = [];
+  if (!modelRoot) return null;
+
+  modelRoot.traverse((node) => {
+    if (node.isBone) bones.push(node);
+  });
+
+  for (const bone of bones) {
+    const name = bone.name.toLowerCase();
+    if (patterns.some((p) => name.includes(p))) {
+      return bone;
     }
+  }
 
-    if (
-      node.isMesh &&
-      node.morphTargetInfluences &&
-      node.morphTargetDictionary
-    ) {
-      morphMeshes.push(node);
+  return null;
+}
+
+function collectRig() {
+  rigBones.hips = findFirstBoneByPatterns(['hips', 'pelvis']);
+  rigBones.spine = findFirstBoneByPatterns(['spine']);
+  rigBones.chest = findFirstBoneByPatterns(['chest', 'upperchest', 'thorax']);
+  rigBones.neck = findFirstBoneByPatterns(['neck']);
+  rigBones.head = findFirstBoneByPatterns(['head']);
+
+  rigBones.leftShoulder = findFirstBoneByPatterns(['leftshoulder', 'lshoulder', 'shoulder_l']);
+  rigBones.rightShoulder = findFirstBoneByPatterns(['rightshoulder', 'rshoulder', 'shoulder_r']);
+
+  rigBones.leftUpperArm = findFirstBoneByPatterns(['leftupperarm', 'lupperarm', 'upperarm_l', 'left arm']);
+  rigBones.rightUpperArm = findFirstBoneByPatterns(['rightupperarm', 'rupperarm', 'upperarm_r', 'right arm']);
+
+  rigBones.leftLowerArm = findFirstBoneByPatterns(['leftlowerarm', 'lforearm', 'lowerarm_l', 'leftforearm']);
+  rigBones.rightLowerArm = findFirstBoneByPatterns(['rightlowerarm', 'rforearm', 'lowerarm_r', 'rightforearm']);
+
+  rigBones.leftHand = findFirstBoneByPatterns(['lefthand', 'lhand', 'hand_l']);
+  rigBones.rightHand = findFirstBoneByPatterns(['righthand', 'rhand', 'hand_r']);
+
+  Object.values(rigBones).forEach((bone) => {
+    if (bone && !baseRotations.has(bone)) {
+      baseRotations.set(bone, bone.rotation.clone());
     }
   });
 
-  log('Morph meshes: ' + morphMeshes.length);
+  log('Rig collected', rigBones);
+}
+
+function collectMorphs() {
+  morphTargets.mouth = [];
+  morphTargets.smile = [];
+  morphTargets.blink = [];
+
+  if (!modelRoot) return;
+
+  modelRoot.traverse((node) => {
+    if (!node.isMesh || !node.morphTargetDictionary || !node.morphTargetInfluences) return;
+
+    const dict = node.morphTargetDictionary;
+
+    for (const key of Object.keys(dict)) {
+      const lower = key.toLowerCase();
+      const index = dict[key];
+
+      if (
+        lower.includes('mouth') ||
+        lower.includes('viseme') ||
+        lower.includes('jawopen') ||
+        lower === 'aa' ||
+        lower.includes('v_aa') ||
+        lower.includes('a_')
+      ) {
+        morphTargets.mouth.push({ mesh: node, index });
+      }
+
+      if (
+        lower.includes('smile') ||
+        lower.includes('happy') ||
+        lower.includes('joy') ||
+        lower.includes('fun')
+      ) {
+        morphTargets.smile.push({ mesh: node, index });
+      }
+
+      if (lower.includes('blink')) {
+        morphTargets.blink.push({ mesh: node, index });
+      }
+    }
+  });
+
+  log('Morphs', morphTargets);
+}
+
+function resetTrackedMorphs() {
+  ['mouth', 'smile', 'blink'].forEach((group) => {
+    morphTargets[group].forEach(({ mesh, index }) => {
+      mesh.morphTargetInfluences[index] = 0;
+    });
+  });
+}
+
+function setMorphGroup(group, value) {
+  morphTargets[group].forEach(({ mesh, index }) => {
+    mesh.morphTargetInfluences[index] = value;
+  });
 }
 
 function fitModel(root) {
   root.rotation.y = MODEL_FRONT_ROTATION;
 
   const box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
 
   root.position.x -= center.x;
   root.position.z -= center.z;
   root.position.y -= box.min.y;
 
-  const maxSize = Math.max(size.x, size.y, size.z);
-  const scale = maxSize > 0 ? 2.15 / maxSize : 1;
+  const box2 = new THREE.Box3().setFromObject(root);
+  const size2 = box2.getSize(new THREE.Vector3());
 
+  const fitHeight = 2.15;
+  const scale = size2.y > 0 ? fitHeight / size2.y : 1;
   root.scale.setScalar(scale);
 
   const finalBox = new THREE.Box3().setFromObject(root);
-  const finalSize = finalBox.getSize(new THREE.Vector3());
   const finalCenter = finalBox.getCenter(new THREE.Vector3());
+  const finalSize = finalBox.getSize(new THREE.Vector3());
 
   root.position.x -= finalCenter.x;
   root.position.z -= finalCenter.z;
   root.position.y -= finalBox.min.y;
 
-  camera.position.set(0, finalSize.y * 0.75, finalSize.z * 2.35 + 1.4);
-  camera.lookAt(0, finalSize.y * 0.48, 0);
+  camera.position.set(0, finalSize.y * 0.58, Math.max(3.0, finalSize.y * 1.7));
+  camera.lookAt(0, finalSize.y * 0.53, 0);
 
-  grid.position.y = 0;
+  floor.position.y = 0;
+  ring.position.y = 0.01;
+  grid.position.y = 0.001;
 
-  log(
-    'MODEL_READY bbox: ' +
-      finalSize.x.toFixed(2) +
-      ' ' +
-      finalSize.y.toFixed(2) +
-      ' ' +
-      finalSize.z.toFixed(2)
-  );
+  log('Model fitted', finalSize);
 }
 
-function resetMorphs() {
-  for (const mesh of morphMeshes) {
-    for (let i = 0; i < mesh.morphTargetInfluences.length; i++) {
-      mesh.morphTargetInfluences[i] = 0;
-    }
-  }
+function applyBoneRotation(bone, x = 0, y = 0, z = 0) {
+  if (!bone) return;
+  const base = baseRotations.get(bone);
+  if (!base) return;
+
+  bone.rotation.x = base.x + x;
+  bone.rotation.y = base.y + y;
+  bone.rotation.z = base.z + z;
 }
 
-function applyMorph(names, value, timeout = 800) {
-  let applied = false;
-
-  for (const mesh of morphMeshes) {
-    const dict = mesh.morphTargetDictionary || {};
-
-    for (const key of Object.keys(dict)) {
-      const lower = key.toLowerCase();
-
-      if (names.some((name) => lower.includes(name))) {
-        mesh.morphTargetInfluences[dict[key]] = value;
-        applied = true;
-      }
-    }
-  }
-
-  if (applied) {
-    setTimeout(resetMorphs, timeout);
-  }
-
-  return applied;
-}
-
-function loadAionModel() {
-  log('Loading ' + MODEL_URL);
-
-  const loader = new GLTFLoader();
-
-  loader.load(
-    MODEL_URL,
-
-    (gltf) => {
-      model = gltf.scene || gltf.scenes[0];
-
-      if (!model) {
-        fail('GLB loaded, but scene is empty');
-        return;
-      }
-
-      scene.remove(testCube);
-
-      fitModel(model);
-      collectMorphs(model);
-      scene.add(model);
-
-      if (gltf.animations && gltf.animations.length > 0) {
-        mixer = new THREE.AnimationMixer(model);
-
-        gltf.animations.forEach((clip) => {
-          mixer.clipAction(clip).play();
-        });
-
-        log('MODEL_READY with animation clips: ' + gltf.animations.length);
-      } else {
-        log('MODEL_READY: no animation clips, procedural idle active');
-      }
-    },
-
-    (event) => {
-      if (event.total) {
-        const percent = Math.round((event.loaded / event.total) * 100);
-        log('Loading model ' + percent + '%');
-      }
-    },
-
-    (error) => {
-      fail('GLB load error: ' + (error?.message || String(error)));
-    }
-  );
-}
-
-function setMode(nextMode) {
-  mode = nextMode;
-  resetMorphs();
-
-  if (nextMode === 'idle') {
-    log('Mode: idle');
-    return;
-  }
-
-  if (nextMode === 'think') {
-    log('Mode: think');
-    return;
-  }
-
-  if (nextMode === 'talk') {
-    const ok = applyMorph(
-      ['a', 'aa', 'mouth', 'viseme', 'v_aa', 'o', 'oh'],
-      0.9,
-      650
-    );
-
-    if (!ok) {
-      log('Mode: talk, but mouth blendshape not found');
-    } else {
-      log('Mode: talk');
-    }
-
-    return;
-  }
-
-  if (nextMode === 'happy') {
-    const ok = applyMorph(
-      ['joy', 'fun', 'happy', 'smile'],
-      1,
-      1200
-    );
-
-    if (!ok) {
-      log('Mode: happy, but smile blendshape not found');
-    } else {
-      log('Mode: happy');
-    }
-
-    return;
-  }
-
-  if (nextMode === 'dance') {
-    log('Dance animation missing in test model');
-    return;
-  }
-}
-
-document.querySelectorAll('[data-mode]').forEach((button) => {
-  button.addEventListener('click', () => {
-    unlockSpeech();
-    setMode(button.dataset.mode);
+function restoreBasePose() {
+  Object.values(rigBones).forEach((bone) => {
+    if (!bone) return;
+    const base = baseRotations.get(bone);
+    if (!base) return;
+    bone.rotation.copy(base);
   });
-});
+}
+
+function applyRestPose() {
+  /*
+    Опускаем руки вниз.
+    Если вдруг руки будут странно выгибаться —
+    потом подправим только эти 4 числа.
+  */
+  applyBoneRotation(rigBones.leftUpperArm, 0.08, 0, 1.18);
+  applyBoneRotation(rigBones.rightUpperArm, 0.08, 0, -1.18);
+
+  applyBoneRotation(rigBones.leftLowerArm, 0.02, 0, 0.18);
+  applyBoneRotation(rigBones.rightLowerArm, 0.02, 0, -0.18);
+}
+
+function detectMood(text) {
+  const t = String(text || '').toLowerCase();
+
+  if (
+    t.includes('спасибо') ||
+    t.includes('люб') ||
+    t.includes('супер') ||
+    t.includes('класс') ||
+    t.includes('рад') ||
+    t.includes('хорош') ||
+    t.includes('мил') ||
+    t.includes('nice') ||
+    t.includes('great')
+  ) {
+    return 'happy';
+  }
+
+  if (
+    t.includes('?') ||
+    t.includes('почему') ||
+    t.includes('как') ||
+    t.includes('что') ||
+    t.includes('зачем') ||
+    t.includes('дума') ||
+    t.includes('интересно')
+  ) {
+    return 'think';
+  }
+
+  return 'talk';
+}
+
+function setMood(mood) {
+  currentMood = mood;
+}
+
+function speakAion(text) {
+  if (!('speechSynthesis' in window)) {
+    fail('TTS not supported in this browser');
+    return;
+  }
+
+  unlockSpeech();
+
+  const utter = new SpeechSynthesisUtterance(String(text).slice(0, 500));
+  utter.lang = 'ru-RU';
+  utter.rate = 1.0;
+  utter.pitch = 1.05;
+  utter.volume = 1.0;
+
+  const voices = speechSynthesis.getVoices();
+  const ruVoice = voices.find((v) => (v.lang || '').toLowerCase().includes('ru'));
+  if (ruVoice) utter.voice = ruVoice;
+
+  utter.onstart = () => {
+    isSpeaking = true;
+  };
+
+  utter.onend = () => {
+    isSpeaking = false;
+    setMood('idle');
+  };
+
+  utter.onerror = () => {
+    isSpeaking = false;
+    setMood('idle');
+  };
+
+  speechSynthesis.cancel();
+  setTimeout(() => {
+    speechSynthesis.speak(utter);
+  }, 80);
+}
 
 async function sendMessage() {
   unlockSpeech();
 
   const text = inputEl.value.trim();
-
-  if (!text) {
-    return;
-  }
+  if (!text) return;
 
   inputEl.value = '';
-  log('You: ' + text);
-  setMode('think');
+  setMood('think');
 
   try {
     const response = await fetch(CHAT_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: text,
         auth_provider: 'web',
@@ -344,112 +432,122 @@ async function sendMessage() {
     const raw = await response.text();
 
     if (!response.ok) {
-      throw new Error('HTTP ' + response.status + ': ' + raw);
+      throw new Error(`HTTP ${response.status}: ${raw}`);
     }
 
-    let json;
-
+    let data;
     try {
-      json = JSON.parse(raw);
+      data = JSON.parse(raw);
     } catch {
-      throw new Error('Backend returned non-JSON: ' + raw);
+      throw new Error('Backend returned invalid JSON');
     }
 
-    const answer = json.answer || json.message || json.reply || '';
-
+    const answer = data.answer || data.message || data.reply || '';
     if (!answer) {
-      throw new Error('Empty backend answer: ' + raw);
+      throw new Error('Empty backend answer');
     }
 
-    log('AION: ' + answer);
-    setMode('talk');
+    const mood = detectMood(answer);
+    setMood(mood);
     speakAion(answer);
-  } catch (error) {
-    fail('Backend error: ' + (error?.message || String(error)));
-    setMode('idle');
+  } catch (e) {
+    fail('Backend error:', e);
+    setMood('idle');
   }
-}
-
-function speakAion(text) {
-  if (!('speechSynthesis' in window)) {
-    log('TTS не поддерживается в этом браузере');
-    return;
-  }
-
-  const utterance = new SpeechSynthesisUtterance(String(text).slice(0, 500));
-
-  utterance.lang = 'ru-RU';
-  utterance.rate = 1.0;
-  utterance.pitch = 1.08;
-  utterance.volume = 1.0;
-
-  const voices = window.speechSynthesis.getVoices();
-  const ruVoice = voices.find((voice) =>
-    voice.lang && voice.lang.toLowerCase().includes('ru')
-  );
-
-  if (ruVoice) {
-    utterance.voice = ruVoice;
-  }
-
-  utterance.onstart = () => {
-    log('AION начала говорить');
-    setMode('talk');
-  };
-
-  utterance.onend = () => {
-    log('AION закончила говорить');
-    setMode('idle');
-  };
-
-  utterance.onerror = (event) => {
-    fail('Ошибка TTS: ' + event.error);
-    setMode('idle');
-  };
-
-  window.speechSynthesis.cancel();
-
-  setTimeout(() => {
-    window.speechSynthesis.speak(utterance);
-  }, 80);
 }
 
 function startVoice() {
   unlockSpeech();
 
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  if (!SpeechRecognition) {
-    log('Голосовой ввод в Safari ограничен. Для нормального STT нужен backend.');
+  if (!Recognition) {
+    /*
+      В Safari на iPhone это может не работать стабильно.
+      Это уже ограничение браузера, а не кода.
+    */
+    fail('SpeechRecognition not supported here');
     return;
   }
 
-  const recognition = new SpeechRecognition();
-
+  const recognition = new Recognition();
   recognition.lang = 'ru-RU';
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
 
   recognition.onstart = () => {
-    log('Voice recognition started');
+    isListening = true;
+    setMood('think');
   };
 
   recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    inputEl.value = transcript;
-    sendMessage();
+    const transcript = event.results?.[0]?.[0]?.transcript || '';
+    if (transcript) {
+      inputEl.value = transcript;
+      sendMessage();
+    }
   };
 
   recognition.onerror = (event) => {
-    fail('Voice error: ' + event.error);
+    fail('Voice error:', event.error);
+    isListening = false;
+    setMood('idle');
   };
 
   recognition.onend = () => {
-    log('Voice recognition ended');
+    isListening = false;
+    if (!isSpeaking) setMood('idle');
   };
 
   recognition.start();
+}
+
+function loadModel() {
+  const loader = new GLTFLoader();
+
+  loader.load(
+    MODEL_URL,
+    (gltf) => {
+      modelRoot = gltf.scene || gltf.scenes?.[0];
+      if (!modelRoot) {
+        fail('Model scene is empty');
+        return;
+      }
+
+      model = modelRoot;
+      scene.remove(testOrb);
+
+      modelRoot.traverse((node) => {
+        if (node.isMesh) {
+          node.frustumCulled = false;
+          if (node.material) {
+            node.material.transparent = true;
+            node.material.needsUpdate = true;
+          }
+        }
+      });
+
+      fitModel(modelRoot);
+      scene.add(modelRoot);
+
+      collectRig();
+      collectMorphs();
+
+      if (gltf.animations && gltf.animations.length) {
+        mixer = new THREE.AnimationMixer(modelRoot);
+        gltf.animations.forEach((clip) => {
+          mixer.clipAction(clip).play();
+        });
+      }
+
+      setMood('idle');
+      log('Model ready');
+    },
+    undefined,
+    (error) => {
+      fail('GLB load error:', error);
+    }
+  );
 }
 
 sendBtn.addEventListener('click', sendMessage);
@@ -463,38 +561,82 @@ inputEl.addEventListener('keydown', (event) => {
 
 const clock = new THREE.Clock();
 
+function animateRig(time, delta) {
+  if (!modelRoot) return;
+
+  restoreBasePose();
+  applyRestPose();
+  resetTrackedMorphs();
+
+  const breath = Math.sin(time * 2.2) * 0.018;
+  const sway = Math.sin(time * 1.1) * 0.04;
+
+  if (rigBones.spine) applyBoneRotation(rigBones.spine, breath * 0.35, 0, 0);
+  if (rigBones.chest) applyBoneRotation(rigBones.chest, breath * 0.6, 0, 0);
+  if (rigBones.neck) applyBoneRotation(rigBones.neck, breath * 0.3, 0, 0);
+  if (rigBones.head) applyBoneRotation(rigBones.head, breath * 0.35, 0, 0);
+
+  if (currentMood === 'idle') {
+    if (rigBones.head) applyBoneRotation(rigBones.head, breath * 0.4, sway * 0.35, 0);
+  }
+
+  if (currentMood === 'think') {
+    if (rigBones.head) applyBoneRotation(rigBones.head, 0.04, 0.12, 0.18);
+    if (rigBones.neck) applyBoneRotation(rigBones.neck, 0.02, 0.06, 0.08);
+    if (morphTargets.blink.length) {
+      setMorphGroup('blink', (Math.sin(time * 5) + 1) * 0.08);
+    }
+  }
+
+  if (currentMood === 'happy') {
+    if (rigBones.head) applyBoneRotation(rigBones.head, -0.02, sway * 0.65, -0.05);
+    if (rigBones.chest) applyBoneRotation(rigBones.chest, 0.03, 0, sway * 0.15);
+    if (morphTargets.smile.length) {
+      setMorphGroup('smile', 0.85);
+    }
+  }
+
+  if (isListening) {
+    if (rigBones.head) applyBoneRotation(rigBones.head, 0.08, 0, 0.07);
+    if (rigBones.neck) applyBoneRotation(rigBones.neck, 0.04, 0, 0.03);
+  }
+
+  if (isSpeaking) {
+    const mouthOpen = (Math.sin(time * 13.5) + 1) * 0.42;
+    const talkNod = Math.sin(time * 7.2) * 0.045;
+
+    if (rigBones.head) applyBoneRotation(rigBones.head, talkNod, 0, 0);
+    if (rigBones.neck) applyBoneRotation(rigBones.neck, talkNod * 0.45, 0, 0);
+
+    if (rigBones.leftHand) applyBoneRotation(rigBones.leftHand, 0, 0, Math.sin(time * 6.1) * 0.08);
+    if (rigBones.rightHand) applyBoneRotation(rigBones.rightHand, 0, 0, -Math.sin(time * 6.1) * 0.08);
+
+    if (morphTargets.mouth.length) {
+      setMorphGroup('mouth', mouthOpen);
+    }
+  }
+
+  /*
+    Никакого "полёта" больше нет —
+    фиксируем модель на полу.
+  */
+  modelRoot.position.y = 0;
+
+  /*
+    Очень лёгкая жизнь, но без левитации.
+  */
+  ring.rotation.z += delta * 0.25;
+}
+
 function animate() {
   requestAnimationFrame(animate);
 
   const delta = clock.getDelta();
   const time = performance.now() / 1000;
 
-  if (mixer) {
-    mixer.update(delta);
-  }
+  if (mixer) mixer.update(delta);
 
-  if (model) {
-    if (mode === 'idle') {
-      model.rotation.y = MODEL_FRONT_ROTATION + Math.sin(time * 0.7) * 0.08;
-      model.position.y += Math.sin(time * 2.1) * 0.00065;
-    }
-
-    if (mode === 'think') {
-      model.rotation.y = MODEL_FRONT_ROTATION + Math.sin(time * 1.2) * 0.18;
-    }
-
-    if (mode === 'talk') {
-      model.rotation.y = MODEL_FRONT_ROTATION + Math.sin(time * 2.6) * 0.06;
-    }
-
-    if (mode === 'happy') {
-      model.rotation.y = MODEL_FRONT_ROTATION + Math.sin(time * 3.0) * 0.09;
-    }
-  } else {
-    testCube.rotation.x += delta * 0.7;
-    testCube.rotation.y += delta * 1.1;
-  }
-
+  animateRig(time, delta);
   renderer.render(scene, camera);
 }
 
@@ -505,10 +647,10 @@ window.addEventListener('resize', () => {
 });
 
 if ('speechSynthesis' in window) {
-  window.speechSynthesis.onvoiceschanged = () => {
-    log('TTS voices loaded: ' + window.speechSynthesis.getVoices().length);
+  speechSynthesis.onvoiceschanged = () => {
+    log('Voices loaded:', speechSynthesis.getVoices().length);
   };
 }
 
-loadAionModel();
+loadModel();
 animate();
