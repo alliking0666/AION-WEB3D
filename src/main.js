@@ -6,10 +6,10 @@ const CHAT_URL = 'https://aion-matrix-core.onrender.com/api/chat';
 const MODEL_URL = '/models/AION_TEST.glb';
 
 /*
-  Если после запуска модель окажется спиной,
-  поменяй 0 на Math.PI
+  Модель стояла спиной, поэтому ставим Math.PI.
+  Если вдруг после этого станет опять не так — попробуем -Math.PI.
 */
-const MODEL_FRONT_ROTATION = 0;
+const MODEL_FRONT_ROTATION = Math.PI;
 
 const canvas = document.getElementById('aion-canvas');
 const inputEl = document.getElementById('message');
@@ -164,15 +164,21 @@ scene.add(testOrb);
 
 function findFirstBoneByPatterns(patterns) {
   const bones = [];
-  if (!modelRoot) return null;
+
+  if (!modelRoot) {
+    return null;
+  }
 
   modelRoot.traverse((node) => {
-    if (node.isBone) bones.push(node);
+    if (node.isBone) {
+      bones.push(node);
+    }
   });
 
   for (const bone of bones) {
     const name = bone.name.toLowerCase();
-    if (patterns.some((p) => name.includes(p))) {
+
+    if (patterns.some((pattern) => name.includes(pattern))) {
       return bone;
     }
   }
@@ -187,17 +193,57 @@ function collectRig() {
   rigBones.neck = findFirstBoneByPatterns(['neck']);
   rigBones.head = findFirstBoneByPatterns(['head']);
 
-  rigBones.leftShoulder = findFirstBoneByPatterns(['leftshoulder', 'lshoulder', 'shoulder_l']);
-  rigBones.rightShoulder = findFirstBoneByPatterns(['rightshoulder', 'rshoulder', 'shoulder_r']);
+  rigBones.leftShoulder = findFirstBoneByPatterns([
+    'leftshoulder',
+    'lshoulder',
+    'shoulder_l'
+  ]);
 
-  rigBones.leftUpperArm = findFirstBoneByPatterns(['leftupperarm', 'lupperarm', 'upperarm_l', 'left arm']);
-  rigBones.rightUpperArm = findFirstBoneByPatterns(['rightupperarm', 'rupperarm', 'upperarm_r', 'right arm']);
+  rigBones.rightShoulder = findFirstBoneByPatterns([
+    'rightshoulder',
+    'rshoulder',
+    'shoulder_r'
+  ]);
 
-  rigBones.leftLowerArm = findFirstBoneByPatterns(['leftlowerarm', 'lforearm', 'lowerarm_l', 'leftforearm']);
-  rigBones.rightLowerArm = findFirstBoneByPatterns(['rightlowerarm', 'rforearm', 'lowerarm_r', 'rightforearm']);
+  rigBones.leftUpperArm = findFirstBoneByPatterns([
+    'leftupperarm',
+    'lupperarm',
+    'upperarm_l',
+    'left arm'
+  ]);
 
-  rigBones.leftHand = findFirstBoneByPatterns(['lefthand', 'lhand', 'hand_l']);
-  rigBones.rightHand = findFirstBoneByPatterns(['righthand', 'rhand', 'hand_r']);
+  rigBones.rightUpperArm = findFirstBoneByPatterns([
+    'rightupperarm',
+    'rupperarm',
+    'upperarm_r',
+    'right arm'
+  ]);
+
+  rigBones.leftLowerArm = findFirstBoneByPatterns([
+    'leftlowerarm',
+    'lforearm',
+    'lowerarm_l',
+    'leftforearm'
+  ]);
+
+  rigBones.rightLowerArm = findFirstBoneByPatterns([
+    'rightlowerarm',
+    'rforearm',
+    'lowerarm_r',
+    'rightforearm'
+  ]);
+
+  rigBones.leftHand = findFirstBoneByPatterns([
+    'lefthand',
+    'lhand',
+    'hand_l'
+  ]);
+
+  rigBones.rightHand = findFirstBoneByPatterns([
+    'righthand',
+    'rhand',
+    'hand_r'
+  ]);
 
   Object.values(rigBones).forEach((bone) => {
     if (bone && !baseRotations.has(bone)) {
@@ -213,10 +259,18 @@ function collectMorphs() {
   morphTargets.smile = [];
   morphTargets.blink = [];
 
-  if (!modelRoot) return;
+  if (!modelRoot) {
+    return;
+  }
 
   modelRoot.traverse((node) => {
-    if (!node.isMesh || !node.morphTargetDictionary || !node.morphTargetInfluences) return;
+    if (
+      !node.isMesh ||
+      !node.morphTargetDictionary ||
+      !node.morphTargetInfluences
+    ) {
+      return;
+    }
 
     const dict = node.morphTargetDictionary;
 
@@ -230,7 +284,9 @@ function collectMorphs() {
         lower.includes('jawopen') ||
         lower === 'aa' ||
         lower.includes('v_aa') ||
-        lower.includes('a_')
+        lower.includes('a_') ||
+        lower.includes('oh') ||
+        lower.includes('o_')
       ) {
         morphTargets.mouth.push({ mesh: node, index });
       }
@@ -272,7 +328,6 @@ function fitModel(root) {
 
   const box = new THREE.Box3().setFromObject(root);
   const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
 
   root.position.x -= center.x;
   root.position.z -= center.z;
@@ -293,7 +348,12 @@ function fitModel(root) {
   root.position.z -= finalCenter.z;
   root.position.y -= finalBox.min.y;
 
-  camera.position.set(0, finalSize.y * 0.58, Math.max(3.0, finalSize.y * 1.7));
+  camera.position.set(
+    0,
+    finalSize.y * 0.58,
+    Math.max(3.0, finalSize.y * 1.7)
+  );
+
   camera.lookAt(0, finalSize.y * 0.53, 0);
 
   floor.position.y = 0;
@@ -304,9 +364,15 @@ function fitModel(root) {
 }
 
 function applyBoneRotation(bone, x = 0, y = 0, z = 0) {
-  if (!bone) return;
+  if (!bone) {
+    return;
+  }
+
   const base = baseRotations.get(bone);
-  if (!base) return;
+
+  if (!base) {
+    return;
+  }
 
   bone.rotation.x = base.x + x;
   bone.rotation.y = base.y + y;
@@ -315,18 +381,24 @@ function applyBoneRotation(bone, x = 0, y = 0, z = 0) {
 
 function restoreBasePose() {
   Object.values(rigBones).forEach((bone) => {
-    if (!bone) return;
+    if (!bone) {
+      return;
+    }
+
     const base = baseRotations.get(bone);
-    if (!base) return;
+
+    if (!base) {
+      return;
+    }
+
     bone.rotation.copy(base);
   });
 }
 
 function applyRestPose() {
   /*
-    Опускаем руки вниз.
-    Если вдруг руки будут странно выгибаться —
-    потом подправим только эти 4 числа.
+    Пытаемся опустить руки вниз.
+    Если руки будут криво — потом подправим только эти числа.
   */
   applyBoneRotation(rigBones.leftUpperArm, 0.08, 0, 1.18);
   applyBoneRotation(rigBones.rightUpperArm, 0.08, 0, -1.18);
@@ -336,30 +408,30 @@ function applyRestPose() {
 }
 
 function detectMood(text) {
-  const t = String(text || '').toLowerCase();
+  const value = String(text || '').toLowerCase();
 
   if (
-    t.includes('спасибо') ||
-    t.includes('люб') ||
-    t.includes('супер') ||
-    t.includes('класс') ||
-    t.includes('рад') ||
-    t.includes('хорош') ||
-    t.includes('мил') ||
-    t.includes('nice') ||
-    t.includes('great')
+    value.includes('спасибо') ||
+    value.includes('люб') ||
+    value.includes('супер') ||
+    value.includes('класс') ||
+    value.includes('рад') ||
+    value.includes('хорош') ||
+    value.includes('мил') ||
+    value.includes('nice') ||
+    value.includes('great')
   ) {
     return 'happy';
   }
 
   if (
-    t.includes('?') ||
-    t.includes('почему') ||
-    t.includes('как') ||
-    t.includes('что') ||
-    t.includes('зачем') ||
-    t.includes('дума') ||
-    t.includes('интересно')
+    value.includes('?') ||
+    value.includes('почему') ||
+    value.includes('как') ||
+    value.includes('что') ||
+    value.includes('зачем') ||
+    value.includes('дума') ||
+    value.includes('интересно')
   ) {
     return 'think';
   }
@@ -379,33 +451,42 @@ function speakAion(text) {
 
   unlockSpeech();
 
-  const utter = new SpeechSynthesisUtterance(String(text).slice(0, 500));
-  utter.lang = 'ru-RU';
-  utter.rate = 1.0;
-  utter.pitch = 1.05;
-  utter.volume = 1.0;
+  const utterance = new SpeechSynthesisUtterance(String(text).slice(0, 500));
+
+  utterance.lang = 'ru-RU';
+  utterance.rate = 1.0;
+  utterance.pitch = 1.05;
+  utterance.volume = 1.0;
 
   const voices = speechSynthesis.getVoices();
-  const ruVoice = voices.find((v) => (v.lang || '').toLowerCase().includes('ru'));
-  if (ruVoice) utter.voice = ruVoice;
+  const ruVoice = voices.find((voice) =>
+    (voice.lang || '').toLowerCase().includes('ru')
+  );
 
-  utter.onstart = () => {
+  if (ruVoice) {
+    utterance.voice = ruVoice;
+  }
+
+  utterance.onstart = () => {
     isSpeaking = true;
+    setMood('talk');
   };
 
-  utter.onend = () => {
+  utterance.onend = () => {
     isSpeaking = false;
     setMood('idle');
   };
 
-  utter.onerror = () => {
+  utterance.onerror = (event) => {
+    fail('TTS error:', event.error);
     isSpeaking = false;
     setMood('idle');
   };
 
   speechSynthesis.cancel();
+
   setTimeout(() => {
-    speechSynthesis.speak(utter);
+    speechSynthesis.speak(utterance);
   }, 80);
 }
 
@@ -413,7 +494,10 @@ async function sendMessage() {
   unlockSpeech();
 
   const text = inputEl.value.trim();
-  if (!text) return;
+
+  if (!text) {
+    return;
+  }
 
   inputEl.value = '';
   setMood('think');
@@ -421,7 +505,9 @@ async function sendMessage() {
   try {
     const response = await fetch(CHAT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
         message: text,
         auth_provider: 'web',
@@ -436,6 +522,7 @@ async function sendMessage() {
     }
 
     let data;
+
     try {
       data = JSON.parse(raw);
     } catch {
@@ -443,6 +530,7 @@ async function sendMessage() {
     }
 
     const answer = data.answer || data.message || data.reply || '';
+
     if (!answer) {
       throw new Error('Empty backend answer');
     }
@@ -450,8 +538,8 @@ async function sendMessage() {
     const mood = detectMood(answer);
     setMood(mood);
     speakAion(answer);
-  } catch (e) {
-    fail('Backend error:', e);
+  } catch (error) {
+    fail('Backend error:', error);
     setMood('idle');
   }
 }
@@ -459,18 +547,16 @@ async function sendMessage() {
 function startVoice() {
   unlockSpeech();
 
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const Recognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (!Recognition) {
-    /*
-      В Safari на iPhone это может не работать стабильно.
-      Это уже ограничение браузера, а не кода.
-    */
     fail('SpeechRecognition not supported here');
     return;
   }
 
   const recognition = new Recognition();
+
   recognition.lang = 'ru-RU';
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
@@ -482,6 +568,7 @@ function startVoice() {
 
   recognition.onresult = (event) => {
     const transcript = event.results?.[0]?.[0]?.transcript || '';
+
     if (transcript) {
       inputEl.value = transcript;
       sendMessage();
@@ -496,7 +583,10 @@ function startVoice() {
 
   recognition.onend = () => {
     isListening = false;
-    if (!isSpeaking) setMood('idle');
+
+    if (!isSpeaking) {
+      setMood('idle');
+    }
   };
 
   recognition.start();
@@ -507,8 +597,10 @@ function loadModel() {
 
   loader.load(
     MODEL_URL,
+
     (gltf) => {
       modelRoot = gltf.scene || gltf.scenes?.[0];
+
       if (!modelRoot) {
         fail('Model scene is empty');
         return;
@@ -520,6 +612,7 @@ function loadModel() {
       modelRoot.traverse((node) => {
         if (node.isMesh) {
           node.frustumCulled = false;
+
           if (node.material) {
             node.material.transparent = true;
             node.material.needsUpdate = true;
@@ -535,6 +628,7 @@ function loadModel() {
 
       if (gltf.animations && gltf.animations.length) {
         mixer = new THREE.AnimationMixer(modelRoot);
+
         gltf.animations.forEach((clip) => {
           mixer.clipAction(clip).play();
         });
@@ -543,7 +637,9 @@ function loadModel() {
       setMood('idle');
       log('Model ready');
     },
+
     undefined,
+
     (error) => {
       fail('GLB load error:', error);
     }
@@ -562,7 +658,9 @@ inputEl.addEventListener('keydown', (event) => {
 const clock = new THREE.Clock();
 
 function animateRig(time, delta) {
-  if (!modelRoot) return;
+  if (!modelRoot) {
+    return;
+  }
 
   restoreBasePose();
   applyRestPose();
@@ -571,45 +669,95 @@ function animateRig(time, delta) {
   const breath = Math.sin(time * 2.2) * 0.018;
   const sway = Math.sin(time * 1.1) * 0.04;
 
-  if (rigBones.spine) applyBoneRotation(rigBones.spine, breath * 0.35, 0, 0);
-  if (rigBones.chest) applyBoneRotation(rigBones.chest, breath * 0.6, 0, 0);
-  if (rigBones.neck) applyBoneRotation(rigBones.neck, breath * 0.3, 0, 0);
-  if (rigBones.head) applyBoneRotation(rigBones.head, breath * 0.35, 0, 0);
+  if (rigBones.spine) {
+    applyBoneRotation(rigBones.spine, breath * 0.35, 0, 0);
+  }
+
+  if (rigBones.chest) {
+    applyBoneRotation(rigBones.chest, breath * 0.6, 0, 0);
+  }
+
+  if (rigBones.neck) {
+    applyBoneRotation(rigBones.neck, breath * 0.3, 0, 0);
+  }
+
+  if (rigBones.head) {
+    applyBoneRotation(rigBones.head, breath * 0.35, 0, 0);
+  }
 
   if (currentMood === 'idle') {
-    if (rigBones.head) applyBoneRotation(rigBones.head, breath * 0.4, sway * 0.35, 0);
+    if (rigBones.head) {
+      applyBoneRotation(rigBones.head, breath * 0.4, sway * 0.35, 0);
+    }
   }
 
   if (currentMood === 'think') {
-    if (rigBones.head) applyBoneRotation(rigBones.head, 0.04, 0.12, 0.18);
-    if (rigBones.neck) applyBoneRotation(rigBones.neck, 0.02, 0.06, 0.08);
+    if (rigBones.head) {
+      applyBoneRotation(rigBones.head, 0.04, 0.12, 0.18);
+    }
+
+    if (rigBones.neck) {
+      applyBoneRotation(rigBones.neck, 0.02, 0.06, 0.08);
+    }
+
     if (morphTargets.blink.length) {
       setMorphGroup('blink', (Math.sin(time * 5) + 1) * 0.08);
     }
   }
 
   if (currentMood === 'happy') {
-    if (rigBones.head) applyBoneRotation(rigBones.head, -0.02, sway * 0.65, -0.05);
-    if (rigBones.chest) applyBoneRotation(rigBones.chest, 0.03, 0, sway * 0.15);
+    if (rigBones.head) {
+      applyBoneRotation(rigBones.head, -0.02, sway * 0.65, -0.05);
+    }
+
+    if (rigBones.chest) {
+      applyBoneRotation(rigBones.chest, 0.03, 0, sway * 0.15);
+    }
+
     if (morphTargets.smile.length) {
       setMorphGroup('smile', 0.85);
     }
   }
 
   if (isListening) {
-    if (rigBones.head) applyBoneRotation(rigBones.head, 0.08, 0, 0.07);
-    if (rigBones.neck) applyBoneRotation(rigBones.neck, 0.04, 0, 0.03);
+    if (rigBones.head) {
+      applyBoneRotation(rigBones.head, 0.08, 0, 0.07);
+    }
+
+    if (rigBones.neck) {
+      applyBoneRotation(rigBones.neck, 0.04, 0, 0.03);
+    }
   }
 
   if (isSpeaking) {
     const mouthOpen = (Math.sin(time * 13.5) + 1) * 0.42;
     const talkNod = Math.sin(time * 7.2) * 0.045;
 
-    if (rigBones.head) applyBoneRotation(rigBones.head, talkNod, 0, 0);
-    if (rigBones.neck) applyBoneRotation(rigBones.neck, talkNod * 0.45, 0, 0);
+    if (rigBones.head) {
+      applyBoneRotation(rigBones.head, talkNod, 0, 0);
+    }
 
-    if (rigBones.leftHand) applyBoneRotation(rigBones.leftHand, 0, 0, Math.sin(time * 6.1) * 0.08);
-    if (rigBones.rightHand) applyBoneRotation(rigBones.rightHand, 0, 0, -Math.sin(time * 6.1) * 0.08);
+    if (rigBones.neck) {
+      applyBoneRotation(rigBones.neck, talkNod * 0.45, 0, 0);
+    }
+
+    if (rigBones.leftHand) {
+      applyBoneRotation(
+        rigBones.leftHand,
+        0,
+        0,
+        Math.sin(time * 6.1) * 0.08
+      );
+    }
+
+    if (rigBones.rightHand) {
+      applyBoneRotation(
+        rigBones.rightHand,
+        0,
+        0,
+        -Math.sin(time * 6.1) * 0.08
+      );
+    }
 
     if (morphTargets.mouth.length) {
       setMorphGroup('mouth', mouthOpen);
@@ -617,14 +765,11 @@ function animateRig(time, delta) {
   }
 
   /*
-    Никакого "полёта" больше нет —
-    фиксируем модель на полу.
+    Фиксируем модель на полу.
+    Никакой левитации.
   */
   modelRoot.position.y = 0;
 
-  /*
-    Очень лёгкая жизнь, но без левитации.
-  */
   ring.rotation.z += delta * 0.25;
 }
 
@@ -634,7 +779,9 @@ function animate() {
   const delta = clock.getDelta();
   const time = performance.now() / 1000;
 
-  if (mixer) mixer.update(delta);
+  if (mixer) {
+    mixer.update(delta);
+  }
 
   animateRig(time, delta);
   renderer.render(scene, camera);
