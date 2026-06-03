@@ -6,33 +6,15 @@
     <meta name="theme-color" content="#020712" />
     <title>AION MATRIX WEB3D</title>
   </head>
-
   <body>
     <div id="app">
       <canvas id="aion-canvas"></canvas>
 
-      <section class="hud top-left">
-        <h1>AION_MATRIX</h1>
-        <p id="status">Запуск 3D ядра...</p>
-      </section>
-
-      <section class="hud top-right" id="log">
-        Лог AION...
-      </section>
-
-      <section class="controls">
-        <button data-mode="idle">Idle</button>
-        <button data-mode="talk">Talk</button>
-        <button data-mode="happy">Happy</button>
-        <button data-mode="think">Think</button>
-        <button data-mode="dance">Dance</button>
-      </section>
-
-      <section class="chat-panel">
-        <input id="message" placeholder="Написать AION..." />
-        <button id="send" title="Отправить">➤</button>
-        <button id="voice" title="Голос">🎙</button>
-      </section>
+      <div class="chat-shell">
+        <input id="message" type="text" autocomplete="off" />
+        <button id="send" aria-label="send">➤</button>
+        <button id="voice" aria-label="voice">🎙</button>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>
