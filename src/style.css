@@ -30,10 +30,10 @@ body,
 .hud {
   position: fixed;
   z-index: 10;
-  background: rgba(0, 8, 18, 0.72);
-  border: 1px solid rgba(100, 210, 255, 0.28);
+  background: rgba(0, 8, 18, 0.78);
+  border: 1px solid rgba(100, 210, 255, 0.35);
   border-radius: 18px;
-  box-shadow: 0 0 28px rgba(0, 180, 255, 0.14);
+  box-shadow: 0 0 28px rgba(0, 180, 255, 0.16);
   backdrop-filter: blur(10px);
 }
 
@@ -46,23 +46,24 @@ body,
 .top-left h1 {
   margin: 0;
   font-size: 22px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
 }
 
 #status {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   color: #76f7ff;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 .top-right {
   right: 14px;
   top: 14px;
-  width: min(380px, calc(100vw - 28px));
+  width: min(390px, calc(100vw - 28px));
   max-height: 30vh;
   overflow: auto;
   padding: 12px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.35;
   white-space: pre-wrap;
   color: #c9f7ff;
@@ -72,7 +73,7 @@ body,
   position: fixed;
   z-index: 11;
   left: 50%;
-  bottom: 86px;
+  bottom: 92px;
   transform: translateX(-50%);
   display: flex;
   gap: 8px;
@@ -82,14 +83,14 @@ body,
 }
 
 button {
-  border: 1px solid rgba(112, 222, 255, 0.38);
-  background: rgba(7, 32, 58, 0.88);
+  border: 1px solid rgba(112, 222, 255, 0.45);
+  background: rgba(7, 32, 58, 0.9);
   color: #eaf8ff;
   border-radius: 14px;
-  padding: 10px 13px;
+  padding: 10px 14px;
   font-size: 14px;
   cursor: pointer;
-  box-shadow: 0 0 18px rgba(0, 160, 255, 0.15);
+  box-shadow: 0 0 18px rgba(0, 160, 255, 0.16);
 }
 
 button:active {
@@ -103,11 +104,11 @@ button:active {
   bottom: 18px;
   transform: translateX(-50%);
   display: grid;
-  grid-template-columns: 1fr 52px 52px;
+  grid-template-columns: 1fr 54px 54px;
   gap: 8px;
   width: min(720px, calc(100vw - 24px));
-  background: rgba(0, 8, 18, 0.72);
-  border: 1px solid rgba(100, 210, 255, 0.28);
+  background: rgba(0, 8, 18, 0.78);
+  border: 1px solid rgba(100, 210, 255, 0.35);
   backdrop-filter: blur(10px);
   border-radius: 18px;
   padding: 8px;
@@ -115,8 +116,8 @@ button:active {
 
 input {
   min-width: 0;
-  border: 1px solid rgba(112, 222, 255, 0.28);
-  background: rgba(4, 16, 32, 0.92);
+  border: 1px solid rgba(112, 222, 255, 0.32);
+  background: rgba(4, 16, 32, 0.94);
   color: #ffffff;
   border-radius: 14px;
   padding: 0 13px;
@@ -129,24 +130,40 @@ input::placeholder {
 }
 
 @media (max-width: 720px) {
+  .top-left {
+    left: 10px;
+    top: 10px;
+    padding: 12px 14px;
+  }
+
   .top-left h1 {
     font-size: 18px;
   }
 
+  #status {
+    font-size: 13px;
+  }
+
   .top-right {
-    top: 96px;
-    right: 14px;
-    left: 14px;
+    top: 100px;
+    right: 10px;
+    left: 10px;
     width: auto;
-    max-height: 22vh;
+    max-height: 23vh;
   }
 
   .controls {
-    bottom: 88px;
+    bottom: 92px;
   }
 
   button {
     padding: 9px 11px;
     font-size: 13px;
+  }
+
+  .chat-panel {
+    grid-template-columns: 1fr 50px 50px;
+    width: calc(100vw - 20px);
+    bottom: 14px;
   }
 }
