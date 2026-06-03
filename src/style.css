@@ -1,1 +1,152 @@
-body { background: #020712; color: white; }
+:root {
+  color-scheme: dark;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #020712;
+  color: #eaf8ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 35%, #0a3057 0%, #020712 55%, #00030a 100%);
+}
+
+#aion-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+.hud {
+  position: fixed;
+  z-index: 10;
+  background: rgba(0, 8, 18, 0.72);
+  border: 1px solid rgba(100, 210, 255, 0.28);
+  border-radius: 18px;
+  box-shadow: 0 0 28px rgba(0, 180, 255, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.top-left {
+  left: 14px;
+  top: 14px;
+  padding: 14px 16px;
+}
+
+.top-left h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+}
+
+#status {
+  margin: 6px 0 0;
+  color: #76f7ff;
+  font-size: 13px;
+}
+
+.top-right {
+  right: 14px;
+  top: 14px;
+  width: min(380px, calc(100vw - 28px));
+  max-height: 30vh;
+  overflow: auto;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  color: #c9f7ff;
+}
+
+.controls {
+  position: fixed;
+  z-index: 11;
+  left: 50%;
+  bottom: 86px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: min(680px, calc(100vw - 20px));
+}
+
+button {
+  border: 1px solid rgba(112, 222, 255, 0.38);
+  background: rgba(7, 32, 58, 0.88);
+  color: #eaf8ff;
+  border-radius: 14px;
+  padding: 10px 13px;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(0, 160, 255, 0.15);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+.chat-panel {
+  position: fixed;
+  z-index: 11;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: 1fr 52px 52px;
+  gap: 8px;
+  width: min(720px, calc(100vw - 24px));
+  background: rgba(0, 8, 18, 0.72);
+  border: 1px solid rgba(100, 210, 255, 0.28);
+  backdrop-filter: blur(10px);
+  border-radius: 18px;
+  padding: 8px;
+}
+
+input {
+  min-width: 0;
+  border: 1px solid rgba(112, 222, 255, 0.28);
+  background: rgba(4, 16, 32, 0.92);
+  color: #ffffff;
+  border-radius: 14px;
+  padding: 0 13px;
+  font-size: 15px;
+  outline: none;
+}
+
+input::placeholder {
+  color: rgba(220, 245, 255, 0.55);
+}
+
+@media (max-width: 720px) {
+  .top-left h1 {
+    font-size: 18px;
+  }
+
+  .top-right {
+    top: 96px;
+    right: 14px;
+    left: 14px;
+    width: auto;
+    max-height: 22vh;
+  }
+
+  .controls {
+    bottom: 88px;
+  }
+
+  button {
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+}
